@@ -67,7 +67,13 @@ async function handleCommands(sock, msg) {
 
     if (!isGroup) return;
 
-    let groupMetadata = await sock.groupMetadata(from);
+    let groupMetadata;
+    try {
+        groupMetadata = await sock.groupMetadata(from);
+    } catch (e) {
+        return;
+    }
+
     const isAdmin = groupMetadata.participants.find(p => p.id === sender)?.admin;
     const isBotAdmin = groupMetadata.participants.find(p => p.id === sock.user.id)?.admin;
 
@@ -124,13 +130,18 @@ async function handleCommands(sock, msg) {
     }
 }
 
-// --- الترحيب بالأعضاء الجدد ---
+// --- الترحيب بالأعضاء الجدد (مع معالجة آمنة تمنع تعطل البوت عند المغادرة) ---
 async function welcomeNew(sock, update) {
-    const { id, participants, action } = update;
-    if (action !== 'add') return;
-    if (!groupData[id]?.welcome) return;
-    for (let user of participants) {
-        await sock.sendMessage(id, { text: `هلا @${user.split('@')[0]} نورت`, mentions: [user] });
+    try {
+        const { id, participants, action } = update;
+        if (action !== 'add') return;
+        if (!groupData[id] || !groupData[id].welcome) return;
+        
+        for (let user of participants) {
+            await sock.sendMessage(id, { text: `هلا @${user.split('@')[0]} نورت`, mentions: [user] });
+        }
+    } catch (err) {
+        console.error("خطأ في حدث الترحيب:", err);
     }
 }
 
@@ -149,9 +160,13 @@ async function startBot() {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
-        await handleCommands(sock, msg);
+        try {
+            const msg = messages[0];
+            if (!msg.message || msg.key.fromMe) return;
+            await handleCommands(sock, msg);
+        } catch (e) {
+            console.error("خطأ في معالجة الرسائل:", e);
+        }
     });
 
     sock.ev.on('group-participants.update', async (update) => {
