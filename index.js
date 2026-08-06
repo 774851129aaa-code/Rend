@@ -1,17 +1,7 @@
 global.crypto = require('crypto');
-const http = require('http');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
-
-// خادم ويب وهمي لإرضاء منصة Render
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot is running successfully\n');
-}).listen(PORT, () => {
-    console.log(`🌐 HTTP Server is listening on port ${PORT}`);
-});
 
 // --- نظام قاعدة البيانات المحلي ---
 let groupData = {};
@@ -157,7 +147,7 @@ async function startBot() {
     let pairingRequested = false;
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -166,9 +156,10 @@ async function startBot() {
             }
         } else if (connection === 'open') {
             console.log('✅ تم اتصال البوت بنجاح وحسابك جاهز للعمل!');
+            pairingRequested = true; // منع طلب الكود نهائياً إذا تم الاتصال بنجاح
         }
 
-        // طلب كود الربط فور توفر اتصال نشط أو محاولة ربط صحيحة
+        // طلب كود الربط مرة واحدة فقط بشكل آمن ومستقل عن تحديثات الحالة المتكررة
         if (!sock.authState.creds.registered && !pairingRequested) {
             pairingRequested = true;
             setTimeout(async () => {
@@ -182,9 +173,10 @@ async function startBot() {
                     console.log(`========================================\n`);
                 } catch (error) {
                     console.error("حدث خطأ أثناء طلب كود الربط:", error);
-                    pairingRequested = false; // السماح بإعادة المحاولة في حال الفشل
+                    // إعادة ضبط المتغير للسماح بإعادة المحاولة حصرياً في حال فشل الطلب الأول خطأ اتصال
+                    pairingRequested = false; 
                 }
-            }, 3000);
+            }, 4000);
         }
     });
 }
