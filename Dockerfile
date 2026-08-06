@@ -1,5 +1,5 @@
 # استخدام إصدار نود الحديث والمستقر على Alpine
-FROM node:18-alpine
+FROM node:20-alpine
 
 # تثبيت الأدوات الضرورية (tzdata للوقت و git لتحميل الاعتماديات التي تعتمد على مستودعات خارجية)
 RUN apk add --no-cache tzdata git
