@@ -1,7 +1,17 @@
-const crypto = require('crypto'); // أضف هذا السطر في أعلى الملف لحل المشكلة
+const crypto = require('crypto'); // حل مشكلة الكريبتو نهائياً
+const http = require('http'); // لفتح منفذ وهمي يمنع إغلاق السيرفر من Render
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
+
+// --- خادم HTTP وهمي لرضا منصة Render وتجنب خطأ Port timeout ---
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('WhatsApp Bot is running successfully!\n');
+}).listen(PORT, () => {
+    console.log(`🌐 HTTP Server is listening on port ${PORT}`);
+});
 
 // --- نظام قاعدة البيانات المحلي ---
 let groupData = {};
