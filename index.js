@@ -40,7 +40,14 @@ function saveMessage(g, s) {
     saveDB();
 }
 
-// --- معالجة الأوامر ---
+// --- قائمة الكلمات المسيئة للطرد التلقائي ---
+const badWords = [
+    'كلب', 'حمار', 'قحبة', 'وسخ', 'حقير', 'سافل', 'منيوك', 'عرص', 
+    'خرا', 'زفت', 'قليل الأدب', 'احا', 'عاهرة', 'شرموطة', 'كلب ابن كلب',
+    'متناك', 'ينعن', 'يزق', 'قحب', 'ابن الكلب', 'قواد'
+];
+
+// --- معالجة الأوامر والرسائل ---
 async function handleCommands(sock, msg) {
     const from = msg.key.remoteJid;
     const isGroup = from.endsWith('@g.us');
@@ -50,10 +57,39 @@ async function handleCommands(sock, msg) {
     const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
 
-    if (isGroup) saveMessage(from, sender);
+    if (!isGroup) return;
+
+    saveMessage(from, sender);
+
+    let groupMetadata;
+    try {
+        groupMetadata = await sock.groupMetadata(from);
+    } catch (e) {
+        return;
+    }
+
+    const isAdmin = groupMetadata.participants.find(p => p.id === sender)?.admin;
+    
+    // فحص أدمن البوت بطريقة دقيقة وصحيحة
+    const botJid = sock.user.id.includes(':') ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : sock.user.id;
+    const isBotAdmin = groupMetadata.participants.find(p => p.id === botJid || p.id === sock.user.id)?.admin;
+
+    // --- نظام فلترة الشتائم والطرد التلقائي ---
+    const hasBadWord = badWords.some(word => textLower.includes(word));
+    if (hasBadWord && !isAdmin) {
+        if (isBotAdmin) {
+            try {
+                await sock.groupParticipantsUpdate(from, [sender], 'remove');
+                await sock.sendMessage(from, { text: `🚫 تم طرد @${sender.id ? sender.id.split('@')[0] : sender.split('@')[0]} بسبب استخدام ألفاظ نابية!`, mentions: [sender] });
+            } catch (err) {
+                console.error("فشل في الطرد التلقائي:", err);
+            }
+        }
+        return;
+    }
 
     if (textLower === 'قائمة') {
-        await sock.sendMessage(from, { text: `📜 القائمة:\n\nبوت - فحص\nالسلام عليكم - رد تلقائي\nترحيب تفعيل / تعطيل\nطرد @\nمعلومات @\nرسائلي\nالمجموعة\nمنشن` });
+        await sock.sendMessage(from, { text: `📜 القائمة:\n\nبوت - فحص\nالسلام عليكم - رد تلقائي\nترحيب تفعيل / تعطيل\nطرد @\nمعلومات @\nرسائلي\nالمجموعة\nمنشن\n\n🛡️ (ملاحظة: البوت يطرد تلقائياً من يشتم)` });
         return;
     }
     if (textLower === 'بوت') {
@@ -65,27 +101,16 @@ async function handleCommands(sock, msg) {
         return;
     }
 
-    if (!isGroup) return;
-
-    let groupMetadata;
-    try {
-        groupMetadata = await sock.groupMetadata(from);
-    } catch (e) {
-        return;
-    }
-
-    const isAdmin = groupMetadata.participants.find(p => p.id === sender)?.admin;
-    const isBotAdmin = groupMetadata.participants.find(p => p.id === sock.user.id)?.admin;
-
     if (textLower === 'ترحيب تفعيل') {
         if (!isAdmin) return;
         if (!groupData[from]) groupData[from] = { messages: {}, welcome: false };
         groupData[from].welcome = true;
         saveDB();
-        await sock.sendMessage(from, { text: '✅ تم تفعيل الترحيب' });
+        await sock.sendMessage(from, { text: '✅ تم تفعيل الترحيب بالأعضاء الجدد' });
         return;
     }
     if (textLower === 'ترحيب تعطيل') {
+        if (!isAdmin) return;
         if (groupData[from]) groupData[from].welcome = false;
         saveDB();
         await sock.sendMessage(from, { text: '❌ تم تعطيل الترحيب' });
@@ -93,11 +118,16 @@ async function handleCommands(sock, msg) {
     }
     if (textLower.startsWith('طرد')) {
         if (!isAdmin) return;
-        if (!isBotAdmin) return sock.sendMessage(from, { text: 'البوت لازم ادمن' });
+        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ البوت يجب أن يكون مشرفاً (أدمن) لكي أستطيع طرد الأعضاء!' });
         const target = mentioned[0] || quoted;
-        if (!target) return sock.sendMessage(from, { text: 'طرد @شخص' });
-        await sock.groupParticipantsUpdate(from, [target], 'remove');
-        await sock.sendMessage(from, { text: `تم طرد @${target.split('@')[0]}`, mentions: [target] });
+        if (!target) return sock.sendMessage(from, { text: '⚠️ قم بمنشن الشخص المراد طرده هكذا: طرد @شخص' });
+        
+        try {
+            await sock.groupParticipantsUpdate(from, [target], 'remove');
+            await sock.sendMessage(from, { text: `✅ تم طرد @${target.split('@')[0]}`, mentions: [target] });
+        } catch (e) {
+            await sock.sendMessage(from, { text: '❌ حدث خطأ أثناء محاولة الطرد، تأكد أن البوت مشرف.' });
+        }
         return;
     }
     if (textLower.startsWith('معلومات')) {
@@ -105,7 +135,7 @@ async function handleCommands(sock, msg) {
         let pfp;
         try { pfp = await sock.profilePictureUrl(target, 'image'); } catch { pfp = null; }
         const count = groupData[from]?.messages?.[target] || 0;
-        const cap = `👤 معلومات\nالرقم: @${target.split('@')[0]}\nالرسائل: ${count}`;
+        const cap = `👤 معلومات العضو:\nالرقم: @${target.split('@')[0]}\nالرسائل المرسلة: ${count}`;
         if (pfp) {
             await sock.sendMessage(from, { image: { url: pfp }, caption: cap, mentions: [target] });
         } else {
@@ -116,29 +146,31 @@ async function handleCommands(sock, msg) {
     if (['رسائلي', 'المجموعة', 'منشن', 'الجميع'].includes(textLower)) {
         if (textLower === 'رسائلي') {
             const c = groupData[from]?.messages?.[sender] || 1;
-            await sock.sendMessage(from, { text: `رسائلك: ${c}` });
+            await sock.sendMessage(from, { text: `📊 عدد رسائلك في هذه المجموعة: ${c}` });
         }
         if (textLower === 'المجموعة') {
-            await sock.sendMessage(from, { text: `الاسم: ${groupMetadata.subject}\nالاعضاء: ${groupMetadata.participants.length}` });
+            await sock.sendMessage(from, { text: `📌 اسم المجموعة: ${groupMetadata.subject}\n👥 عدد الأعضاء: ${groupMetadata.participants.length}` });
         }
         if (['منشن', 'الجميع'].includes(textLower)) {
             if (!isAdmin) return;
             const all = groupMetadata.participants.map(p => p.id);
-            await sock.sendMessage(from, { text: 'منشن للجميع', mentions: all });
+            await sock.sendMessage(from, { text: '📢 منشن جماعي للأعضاء:', mentions: all });
         }
         return;
     }
 }
 
-// --- الترحيب بالأعضاء الجدد (مع معالجة آمنة تمنع تعطل البوت عند المغادرة) ---
+// --- الترحيب بالأعضاء الجدد ---
 async function welcomeNew(sock, update) {
     try {
         const { id, participants, action } = update;
         if (action !== 'add') return;
-        if (!groupData[id] || !groupData[id].welcome) return;
+        
+        // التحقق من تفعيل الترحيب في قاعدة البيانات لهذا القروب
+        if (!groupData[id] || groupData[id].welcome !== true) return;
         
         for (let user of participants) {
-            await sock.sendMessage(id, { text: `هلا @${user.split('@')[0]} نورت`, mentions: [user] });
+            await sock.sendMessage(id, { text: `هلا وغلآ بـ @${user.split('@')[0]} 🌸 نورت المجموعة!`, mentions: [user] });
         }
     } catch (err) {
         console.error("خطأ في حدث الترحيب:", err);
