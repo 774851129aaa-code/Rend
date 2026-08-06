@@ -144,8 +144,32 @@ async function startBot() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // طلب كود الربط بطريقة آمنة بعد التأكد من عمل الاتصال
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+        await handleCommands(sock, msg);
+    });
+
+    sock.ev.on('group-participants.update', async (update) => {
+        await welcomeNew(sock, update);
+    });
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) {
+                startBot();
+            }
+        } else if (connection === 'open') {
+            console.log('✅ تم اتصال البوت بنجاح وحسابك جاهز للعمل!');
+        }
+    });
+
+    // طلب كود الربط بطريقة صحيحة تضمن اتصال السوكيت مسبقاً
     if (!sock.authState.creds.registered) {
+        // الانتظار حتى يصبح الاتصال جاهزاً تماماً ثم طلب الكود لمرة واحدة فقط
         setTimeout(async () => {
             try {
                 const phoneNumber = "249900891702";
@@ -158,30 +182,8 @@ async function startBot() {
             } catch (error) {
                 console.error("حدث خطأ أثناء طلب كود الربط:", error);
             }
-        }, 8000); // زيادة الوقت قليلاً ليتم الاتصال بثبات
+        }, 4000); // تقليل وتعديل وقت الانتظار ليتوافق مع سرعة السيرفر
     }
-
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
-        await handleCommands(sock, msg);
-    });
-
-    sock.ev.on('group-participants.update', async (update) => {
-        await welcomeNew(sock, update);
-    });
-
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) {
-                startBot();
-            }
-        } else if (connection === 'open') {
-            console.log('✅ تم اتصال البوت بنجاح وحسابك جاهز للعمل!');
-        }
-    });
 }
 
 startBot();
