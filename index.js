@@ -154,8 +154,10 @@ async function startBot() {
         await welcomeNew(sock, update);
     });
 
+    let pairingRequested = false;
+
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
         
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -165,25 +167,26 @@ async function startBot() {
         } else if (connection === 'open') {
             console.log('✅ تم اتصال البوت بنجاح وحسابك جاهز للعمل!');
         }
-    });
 
-    // طلب كود الربط بطريقة صحيحة تضمن اتصال السوكيت مسبقاً
-    if (!sock.authState.creds.registered) {
-        // الانتظار حتى يصبح الاتصال جاهزاً تماماً ثم طلب الكود لمرة واحدة فقط
-        setTimeout(async () => {
-            try {
-                const phoneNumber = "249900891702";
-                console.log("⏳ جاري طلب كود الربط من واتساب...");
-                let code = await sock.requestPairingCode(phoneNumber);
-                code = code?.match(/.{1,4}/g)?.join("-") || code;
-                console.log(`\n========================================`);
-                console.log(`🔐 كود الربط الخاص بك هو: ${code}`);
-                console.log(`========================================\n`);
-            } catch (error) {
-                console.error("حدث خطأ أثناء طلب كود الربط:", error);
-            }
-        }, 4000); // تقليل وتعديل وقت الانتظار ليتوافق مع سرعة السيرفر
-    }
+        // طلب كود الربط فور توفر اتصال نشط أو محاولة ربط صحيحة
+        if (!sock.authState.creds.registered && !pairingRequested) {
+            pairingRequested = true;
+            setTimeout(async () => {
+                try {
+                    const phoneNumber = "249900891702";
+                    console.log("⏳ جاري طلب كود الربط من واتساب...");
+                    let code = await sock.requestPairingCode(phoneNumber);
+                    code = code?.match(/.{1,4}/g)?.join("-") || code;
+                    console.log(`\n========================================`);
+                    console.log(`🔐 كود الربط الخاص بك هو: ${code}`);
+                    console.log(`========================================\n`);
+                } catch (error) {
+                    console.error("حدث خطأ أثناء طلب كود الربط:", error);
+                    pairingRequested = false; // السماح بإعادة المحاولة في حال الفشل
+                }
+            }, 3000);
+        }
+    });
 }
 
 startBot();
