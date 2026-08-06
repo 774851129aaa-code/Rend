@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+global.crypto = require('crypto'); // الحل الجذري والنهائي للـ crypto
 const http = require('http');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
