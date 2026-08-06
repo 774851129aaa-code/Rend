@@ -1,3 +1,17 @@
+const http = require('http');
+
+// --- خادم ويب وهمي لمنع منصة Render من إيقاف البوت ---
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('WhatsApp Bot is active and running!\n');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`🌐 Server is running on port ${PORT}`);
+});
+
+// --- كود بوت الواتساب ---
 global.crypto = require('crypto');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
@@ -155,7 +169,6 @@ async function startBot() {
             console.log(`⚠️ انقطع الاتصال بسبب: ${lastDisconnect?.error?.message || 'غير معروف'} (رمز الخطأ: ${statusCode})`);
             
             if (shouldReconnect) {
-                // إضافة فاصل زمنسي بسيط قبل إعادة التشغيل لتفادي حظر المنصة (SIGTERM)
                 setTimeout(() => {
                     startBot();
                 }, 5000);
@@ -164,7 +177,6 @@ async function startBot() {
             console.log('✅ تم اتصال البوت بنجاح وحسابك جاهز للعمل!');
         }
 
-        // طلب كود الربط مرة واحدة فقط بشكل آمن
         if (!sock.authState.creds.registered && !hasRequestedPairing) {
             hasRequestedPairing = true;
             
@@ -179,7 +191,7 @@ async function startBot() {
                     console.log(`========================================\n`);
                 } catch (error) {
                     console.error("حدث خطأ أثناء طلب كود الربط:", error.message || error);
-                    hasRequestedPairing = false; // السماح بإعادة المحاولة عند الخطأ فقط
+                    hasRequestedPairing = false;
                 }
             }, 5000);
         }
