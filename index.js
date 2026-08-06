@@ -1,10 +1,10 @@
-global.crypto = require('crypto'); // الحل الجذري والنهائي للـ crypto
+global.crypto = require('crypto');
 const http = require('http');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
 
-// خادم ويب وهمي لإرضاء منصة Render ومنع خطأ التوقف
+// خادم ويب وهمي لإرضاء منصة Render
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -142,10 +142,14 @@ async function startBot() {
         logger: pino({ level: 'silent' })
     });
 
+    sock.ev.on('creds.update', saveCreds);
+
+    // طلب كود الربط بطريقة آمنة بعد التأكد من عمل الاتصال
     if (!sock.authState.creds.registered) {
-        const phoneNumber = "249900891702";
         setTimeout(async () => {
             try {
+                const phoneNumber = "249900891702";
+                console.log("⏳ جاري طلب كود الربط من واتساب...");
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
                 console.log(`\n========================================`);
@@ -154,10 +158,8 @@ async function startBot() {
             } catch (error) {
                 console.error("حدث خطأ أثناء طلب كود الربط:", error);
             }
-        }, 5000);
+        }, 8000); // زيادة الوقت قليلاً ليتم الاتصال بثبات
     }
-
-    sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
