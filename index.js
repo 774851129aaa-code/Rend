@@ -150,19 +150,24 @@ async function startBot() {
         const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            console.log(`⚠️ انقطع الاتصال بسبب: ${lastDisconnect?.error?.message || 'غير معروف'} (رمز الخطأ: ${statusCode})`);
+            
             if (shouldReconnect) {
-                startBot();
+                // إضافة فاصل زمنسي بسيط قبل إعادة التشغيل لتفادي حظر المنصة (SIGTERM)
+                setTimeout(() => {
+                    startBot();
+                }, 5000);
             }
         } else if (connection === 'open') {
             console.log('✅ تم اتصال البوت بنجاح وحسابك جاهز للعمل!');
         }
 
-        // طلب كود الربط بطريقة آمنة تمنع التكرار نهائياً وتنتظر استقرار السوكيت
+        // طلب كود الربط مرة واحدة فقط بشكل آمن
         if (!sock.authState.creds.registered && !hasRequestedPairing) {
             hasRequestedPairing = true;
             
-            // منح السوكيت ثوانٍ معدودة لتثبيت الاتصال المبدئي دون تكرار
             setTimeout(async () => {
                 try {
                     const phoneNumber = "249900891702";
@@ -174,8 +179,9 @@ async function startBot() {
                     console.log(`========================================\n`);
                 } catch (error) {
                     console.error("حدث خطأ أثناء طلب كود الربط:", error.message || error);
+                    hasRequestedPairing = false; // السماح بإعادة المحاولة عند الخطأ فقط
                 }
-            }, 6000);
+            }, 5000);
         }
     });
 }
