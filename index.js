@@ -1,3 +1,4 @@
+const crypto = require('crypto'); // أضف هذا السطر في أعلى الملف لحل المشكلة
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
