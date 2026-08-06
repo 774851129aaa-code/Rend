@@ -144,7 +144,7 @@ async function startBot() {
         await welcomeNew(sock, update);
     });
 
-    let pairingRequested = false;
+    let hasRequestedPairing = false;
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
@@ -156,12 +156,13 @@ async function startBot() {
             }
         } else if (connection === 'open') {
             console.log('✅ تم اتصال البوت بنجاح وحسابك جاهز للعمل!');
-            pairingRequested = true; // منع طلب الكود نهائياً إذا تم الاتصال بنجاح
         }
 
-        // طلب كود الربط مرة واحدة فقط بشكل آمن ومستقل عن تحديثات الحالة المتكررة
-        if (!sock.authState.creds.registered && !pairingRequested) {
-            pairingRequested = true;
+        // طلب كود الربط بطريقة آمنة تمنع التكرار نهائياً وتنتظر استقرار السوكيت
+        if (!sock.authState.creds.registered && !hasRequestedPairing) {
+            hasRequestedPairing = true;
+            
+            // منح السوكيت ثوانٍ معدودة لتثبيت الاتصال المبدئي دون تكرار
             setTimeout(async () => {
                 try {
                     const phoneNumber = "249900891702";
@@ -172,11 +173,9 @@ async function startBot() {
                     console.log(`🔐 كود الربط الخاص بك هو: ${code}`);
                     console.log(`========================================\n`);
                 } catch (error) {
-                    console.error("حدث خطأ أثناء طلب كود الربط:", error);
-                    // إعادة ضبط المتغير للسماح بإعادة المحاولة حصرياً في حال فشل الطلب الأول خطأ اتصال
-                    pairingRequested = false; 
+                    console.error("حدث خطأ أثناء طلب كود الربط:", error.message || error);
                 }
-            }, 4000);
+            }, 6000);
         }
     });
 }
