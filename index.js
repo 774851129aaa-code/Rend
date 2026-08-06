@@ -1,14 +1,14 @@
-const crypto = require('crypto'); // حل مشكلة الكريبتو نهائياً
-const http = require('http'); // لفتح منفذ وهمي يمنع إغلاق السيرفر من Render
+const crypto = require('crypto');
+const http = require('http');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
 
-// --- خادم HTTP وهمي لرضا منصة Render وتجنب خطأ Port timeout ---
+// خادم ويب وهمي لإرضاء منصة Render ومنع خطأ التوقف
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('WhatsApp Bot is running successfully!\n');
+    res.end('Bot is running successfully\n');
 }).listen(PORT, () => {
     console.log(`🌐 HTTP Server is listening on port ${PORT}`);
 });
@@ -154,7 +154,7 @@ async function startBot() {
             } catch (error) {
                 console.error("حدث خطأ أثناء طلب كود الربط:", error);
             }
-        }, 4000);
+        }, 5000);
     }
 
     sock.ev.on('creds.update', saveCreds);
