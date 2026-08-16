@@ -468,7 +468,6 @@ function getUser(userId, username, firstName) {
     if (!globalData.bank[uKey].fine) globalData.bank[uKey].fine = 0;
     if (globalData.bank[uKey].shieldUntil === undefined) globalData.bank[uKey].shieldUntil = 0;
     if (globalData.bank[uKey].job === undefined) globalData.bank[uKey].job = null;
-    if (globalData.bank[uKey].lastWorkTime === undefined) globalData.bank[uKey].lastWorkTime = 0;
     if (globalData.bank[uKey].isVip === undefined) globalData.bank[uKey].isVip = false;
     if (username) globalData.bank[uKey].username = username;
     if (firstName) globalData.bank[uKey].name = firstName;
@@ -1111,6 +1110,7 @@ function getTopData() {
     return { text: msg, mentions: [...new Set(mentions)] };
 }
 
+// دالة جلب المتفاعلين في المجموعة
 function getActiveMembers(chatId) {
     if (!globalData.activity[chatId]) {
         return '📊 لا توجد بيانات تفاعل مسجلة لهذه المجموعة بعد!';
@@ -1580,6 +1580,7 @@ async function startBot() {
             await sock.sendMessage(jid, { text: res }, { quoted: msg });
         }
 
+        // --- دفع الغرامة (للسجين نفسه أو توكيل محامي لشخص آخر) ---
         else if (text === 'دفع الغرامة' || text === 'فك اسري' || text.startsWith('محامي')) {
             const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
             const mentionedJid = contextInfo?.mentionedJid?.[0];
@@ -1707,22 +1708,35 @@ async function startBot() {
             await sock.sendMessage(jid, { text: res }, { quoted: msg });
         }
 
-        else if (text === 'عمل') {
+        else if (text === 'عمل' || text.startsWith('عمل ')) {
             const res = workForCompany(cleanSenderId);
             await sock.sendMessage(jid, { text: res }, { quoted: msg });
         }
 
-        else if (text === 'التوب' || text === 'توب') {
+        else if (text === 'التوب') {
             const topData = getTopData();
-            await sock.sendMessage(jid, { text: topData.text, mentions: topData.mentions }, { quoted: msg });
+            await sock.sendMessage(jid, { 
+                text: topData.text, 
+                mentions: topData.mentions 
+            }, { quoted: msg });
         }
 
-        else if (text === 'المتفاعلين' || text === 'متفاعلين') {
+        else if (text === 'المتفاعلين' || text === 'التفاعل' || text === 'نشاط') {
+            if (!jid.endsWith('@g.us')) {
+                await sock.sendMessage(jid, { text: '❌ هذا الأمر يعمل داخل المجموعات فقط!' }, { quoted: msg });
+                return;
+            }
             const activeData = getActiveMembers(jid);
-            await sock.sendMessage(jid, { text: activeData.text, mentions: activeData.mentions }, { quoted: msg });
+            if (typeof activeData === 'string') {
+                await sock.sendMessage(jid, { text: activeData }, { quoted: msg });
+            } else {
+                await sock.sendMessage(jid, { 
+                    text: activeData.text, 
+                    mentions: activeData.mentions 
+                }, { quoted: msg });
+            }
         }
 
-        // --- أوامر الزواج والعلاقات ---
         else if (text.startsWith('زواج')) {
             const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
             const mentionedJid = contextInfo?.mentionedJid?.[0];
@@ -1730,16 +1744,24 @@ async function startBot() {
             const targetJid = mentionedJid || quotedParticipant;
 
             if (!targetJid) {
-                await sock.sendMessage(jid, { text: '❌ يرجى عمل منشن أو رد على رسالة الشخص المراد الزواج منه مع تحديد المهر!\nمثال: `زواج 1000` (مع منشن)' }, { quoted: msg });
+                await sock.sendMessage(jid, { text: '❌ يرجى عمل منشن أو رد على رسالة الشخص الذي تريد الزواج منه وتحديد المبلغ!\nمثال: `زواج 5000`' }, { quoted: msg });
                 return;
             }
 
-            const dowry = text.replace('زواج', '').replace('@' + targetJid.split('@')[0], '').trim();
+            const args = text.split(' ');
+            const customDowry = args.find(arg => !isNaN(arg) && parseInt(arg) > 0);
+
+            if (!customDowry) {
+                await sock.sendMessage(jid, { text: '❌ يرجى كتابة قيمة المهر بعد كلمة زواج!\nمثال: `زواج 1000`' }, { quoted: msg });
+                return;
+            }
+
             const targetId = targetJid.split('@')[0].split(':')[0];
-            const res = marry(cleanSenderId, targetId, dowry);
+            const res = marry(cleanSenderId, targetId, customDowry);
             await sock.sendMessage(jid, { text: res }, { quoted: msg });
         }
 
+        // --- أوامر الزواج المضافة (طلاق، خلع، حالي/زواجي) ---
         else if (text === 'طلاق') {
             const res = divorce(cleanSenderId);
             await sock.sendMessage(jid, { text: res }, { quoted: msg });
@@ -1750,12 +1772,39 @@ async function startBot() {
             await sock.sendMessage(jid, { text: res }, { quoted: msg });
         }
 
-        else if (text === 'زواجي' || text === 'حالي') {
+        else if (text === 'حالي' || text === 'زواجي') {
             const res = getStatus(cleanSenderId);
+            await sock.sendMessage(jid, { text: res }, { quoted: msg });
+        }
+
+        // --- نظام الشحن والسحب المفتوح في كل المجموعات بالرمز السري ---
+        else if (text.startsWith('شحن ') || text.startsWith('سحب ')) {
+            if (!text.includes("annoor77485")) {
+                await sock.sendMessage(jid, { text: '❌ عذراً، خطأ في الرمز السري أو صيغة الأمر غير صحيحة!' }, { quoted: msg });
+                return;
+            }
+            const parts = text.split(' ');
+            const amount = parseInt(parts.find(p => !isNaN(p) && parseInt(p) > 0));
+            const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+            const mentionedJid = contextInfo?.mentionedJid?.[0];
+            const quotedParticipant = contextInfo?.participant;
+            const targetJid = mentionedJid || quotedParticipant;
+
+            if (!targetJid || isNaN(amount)) {
+                await sock.sendMessage(jid, { text: '❌ صيغة الأمر غير صحيحة! استخدم: شحن/سحب [المبلغ] [الرمز] مع منشن.' }, { quoted: msg });
+                return;
+            }
+
+            const targetId = targetJid.split('@')[0].split(':')[0];
+            let res = "";
+            if (text.startsWith('شحن')) {
+                res = addMoney(targetId, amount);
+            } else {
+                res = subtractMoney(targetId, amount);
+            }
             await sock.sendMessage(jid, { text: res }, { quoted: msg });
         }
     });
 }
 
-// بدء تشغيل البوت
 startBot();
